@@ -1,27 +1,24 @@
 const std = @import("std");
-const fs = std.fs;
-const print = std.debug.print;
 
 const fe = @import("explorer.zig");
 
+const vaxis = @import("vaxis");
+
 pub fn main() !void {
-    //allocator
+    // allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    //set up fs walker/scanner
+    // set up fs walker/scanner
     var fileExplorer = try fe.DirScanner.init(alloc);
     defer fileExplorer.deinit();
 
-    try fileExplorer.scan_dir();
-    fileExplorer.print_all();
+    // init tty
+    var tty = try vaxis.Tty.init();
+    defer tty.deinit();
 
-    try fileExplorer.go_up();
-    try fileExplorer.scan_dir();
-    fileExplorer.print_all();
-
-    try fileExplorer.enter_sub_dir("fe");
-    try fileExplorer.scan_dir();
-    fileExplorer.print_all();
+    // init vaxis
+    var vx = try vaxis.init(alloc, .{});
+    defer vx.deinit(alloc, tty.anyWriter());
 }

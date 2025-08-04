@@ -38,6 +38,7 @@ pub const DirScanner = struct {
         self.clear_list();
         self.cur_dir.close();
         self.cur_dir = parent_dir;
+        try self.scan_dir();
     }
 
     /// enters a child dir
@@ -46,8 +47,10 @@ pub const DirScanner = struct {
         self.clear_list();
         self.cur_dir.close();
         self.cur_dir = new_dir;
+        try self.scan_dir();
     }
 
+    /// scan the contents of a directory
     pub fn scan_dir(self: *DirScanner) !void {
         self.clear_list();
 
