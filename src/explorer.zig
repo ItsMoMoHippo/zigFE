@@ -1,43 +1,81 @@
 const std = @import("std");
 
-const DirView = struct {
-    cwd: std.fs.Dir,
+pub const DirScanner = struct {
+    /// Directory currently being used
+    cur_dir: std.fs.Dir,
+
+    /// List of all immediate sub directories
     dirList: std.ArrayList([]const u8),
+
+    /// List of all files that are immediate
+    /// children of the current working directory
     fileList: std.ArrayList([]const u8),
+
+    /// Allocator used for dynamic allocations
     alloc: std.mem.Allocator,
 
-    ///init
-    pub fn init(allocator: std.mem.Allocator) !DirView {
-        const curr_dir = try std.fs.cwd().openDir(".", .{ .iterate = true });
-        return DirView{
-            .cwd = curr_dir,
+    /// init the struct
+    pub fn init(allocator: std.mem.Allocator) !DirScanner {
+        return DirScanner{
+            .cur_dir = try std.fs.cwd().openDir(".", .{ .iterate = true }),
             .dirList = std.ArrayList([]const u8).init(allocator),
             .fileList = std.ArrayList([]const u8).init(allocator),
             .alloc = allocator,
         };
     }
 
-    ///deinit
-    pub fn deinit(self: *DirView) void {
-        for (self.dirList.items) |name| self.alloc.free(name);
+    /// cleans up resources
+    pub fn deinit(self: *DirScanner) void {
+        self.clear_list();
         self.dirList.deinit();
-        for (self.fileList.items) |name| self.alloc.free(name);
         self.fileList.deinit();
+        self.cur_dir.close();
     }
 
-    /// grabs all files and sub dirs
-    pub fn crawl_cwd(self: *DirView) !void {
-        var iter = self.cwd.iterate();
+    /// moves to parent dir
+    pub fn go_up(self: *DirScanner) !void {
+        const parent_dir = try self.cur_dir.openDir("..", .{ .iterate = true });
+        self.clear_list();
+        self.cur_dir.close();
+        self.cur_dir = parent_dir;
+    }
+
+    /// enters a child dir
+    pub fn enter_sub_dir(self: *DirScanner, sub_dir: []const u8) !void {
+        const new_dir = try self.cur_dir.openDir(sub_dir, .{ .iterate = true });
+        self.clear_list();
+        self.cur_dir.close();
+        self.cur_dir = new_dir;
+    }
+
+    pub fn scan_dir(self: *DirScanner) !void {
+        self.clear_list();
+
+        var iter = self.cur_dir.iterate();
         while (try iter.next()) |entry| {
             const name = try self.alloc.dupe(u8, entry.name);
             switch (entry.kind) {
-                .directory => try self.dirList.append(name),
                 .file => try self.fileList.append(name),
+                .directory => try self.dirList.append(name),
                 else => self.alloc.free(name),
             }
         }
-        std.mem.sortUnstable([]const u8, self.dirList.items, {}, sort_slices);
-        std.mem.sortUnstable([]const u8, self.fileList.items, {}, sort_slices);
+
+        std.mem.sort([]const u8, self.dirList.items, {}, sort_slices);
+        std.mem.sort([]const u8, self.fileList.items, {}, sort_slices);
+    }
+
+    /// prints values of items in the current directory
+    pub fn print_all(self: *const DirScanner) void {
+        std.debug.print("dirs:\n", .{});
+        for (self.dirList.items) |dir| {
+            std.debug.print("\t{s}/\n", .{dir});
+        }
+        std.debug.print("files:\n", .{});
+        for (self.fileList.items) |file| {
+            std.debug.print("\t{s}\n", .{file});
+        }
+        std.debug.print("\n", .{});
     }
 
     /// Sort strings
@@ -45,36 +83,11 @@ const DirView = struct {
         return std.mem.lessThan(u8, a, b);
     }
 
-    /// change cwd
-    pub fn set_cwd(self: *DirView, dir: std.fs.Dir) void {
-        for (self.dirList.items) |name| self.alloc.free(name);
+    /// clear lists
+    fn clear_list(self: *DirScanner) void {
+        for (self.dirList.items) |n| self.alloc.free(n);
+        for (self.fileList.items) |n| self.alloc.free(n);
         self.dirList.clearRetainingCapacity();
-        for (self.fileList.items) |name| self.alloc.free(name);
         self.fileList.clearRetainingCapacity();
-
-        self.cwd.close();
-        self.cwd = dir;
-    }
-
-    ///prints all immediate children of a dir
-    pub fn print_all(self: *DirView) void {
-        std.debug.print("dirs:\n", .{});
-        for (self.dirList.items) |dir| {
-            std.debug.print("\t{s}\n", .{dir});
-        }
-        std.debug.print("files:\n", .{});
-        for (self.fileList.items) |file| {
-            std.debug.print("\t{s}\n", .{file});
-        }
-    }
-
-    pub fn enter_dir(self: *DirView, dir_name: []const u8) !void {
-        const new_dir = try self.cwd.openDir(dir_name, .{ .iterate = true });
-        self.set_cwd(new_dir);
-    }
-
-    pub fn go_up(self: *DirView) !void {
-        const parent = try self.cwd.openDir("..", .{ .iterate = true });
-        self.set_cwd(parent);
     }
 };
