@@ -69,6 +69,8 @@ pub const DirScanner = struct {
     }
 
     /// prints values of items in the current directory
+    ///
+    /// For debugging moving through directories
     pub fn print_all(self: *const DirScanner) void {
         std.debug.print("dirs:\n", .{});
         for (self.dirList.items) |dir| {
